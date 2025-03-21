@@ -1,16 +1,30 @@
 import express from 'express';
 import Customer from '../model/CustomerModel.js';
 import bcrypt from 'bcryptjs';
+import upload from '../../config/multerConfig.js';
 
 const router = express.Router();
 
-// ✅ Create Customer
-router.post('/create', async (req, res) => {
+// ✅ Create Customer (with profile picture upload)
+router.post('/customer/create', upload.single("profilePic"), async (req, res) => {
     try {
-        const { email, mobileNo, name, lastName, password, user_type, profilePic } = req.body;
-
+        const { email, mobileNo, name, lastName, password, user_type } = req.body;
+         // Check if email already exists
+         const existingEmailCustomer = await Customer.findOne({ email });
+         if (existingEmailCustomer) {
+             return res.status(400).json({ message: 'Email already exists. Please use a different email.' });
+         }
+ 
+         // Check if mobileNo already exists
+         const existingMobileCustomer = await Customer.findOne({ mobileNo });
+         if (existingMobileCustomer) {
+             return res.status(400).json({ message: 'Mobile number already exists. Please use a different mobile number.' });
+         }
+ 
         // Hash password before saving
         const hashedPassword = await bcrypt.hash(password, 10);
+
+        const profilePic = req.file ? req.file.path : ""; // Get profile 
 
         const newCustomer = new Customer({
             email,
@@ -25,12 +39,12 @@ router.post('/create', async (req, res) => {
         await newCustomer.save();
         res.status(201).json({ message: 'Customer created successfully', customer: newCustomer });
     } catch (error) {
-        res.status(500).json({ message: 'Error creating customer', error: error.message });
+        res.status(500).json({ message: `Error creating customer: ${error.message}`, error: error.message });
     }
 });
 
 // ✅ Get All Active Customers
-router.get('/all', async (req, res) => {
+router.get('/customer/all', async (req, res) => {
     try {
         const customers = await Customer.find({ status: 1 }).select('-password'); // Hide password
         res.status(200).json(customers);
@@ -40,7 +54,7 @@ router.get('/all', async (req, res) => {
 });
 
 // ✅ Get Customer by ID
-router.get('/:id', async (req, res) => {
+router.get('/customer/:id', async (req, res) => {
     try {
         const customer = await Customer.findById(req.params.id).select('-password'); // Hide password
         if (!customer) return res.status(404).json({ message: 'Customer not found' });
@@ -51,14 +65,20 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// ✅ Update Customer
-router.put('/update/:id', async (req, res) => {
+// ✅ Update Customer (with optional profile picture upload)
+router.put('/customer/update/:id', upload.single('profilePic'), async (req, res) => {
     try {
-        const { name, lastName, profilePic } = req.body;
+        const { name, lastName } = req.body;
+
+        let updateData = { name, lastName };
+
+        if (req.file) {
+            updateData.profilePic = req.file.path; // Update profile picture path if a new file is uploaded
+        }
 
         const updatedCustomer = await Customer.findByIdAndUpdate(
             req.params.id,
-            { name, lastName, profilePic },
+            updateData,
             { new: true }
         );
 
@@ -71,7 +91,7 @@ router.put('/update/:id', async (req, res) => {
 });
 
 // ✅ Soft Delete Customer (Change Status to 0)
-router.put('/delete/:id', async (req, res) => {
+router.put('/customer/delete/:id', async (req, res) => {
     try {
         const updatedCustomer = await Customer.findByIdAndUpdate(
             req.params.id,

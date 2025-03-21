@@ -1,124 +1,101 @@
 import express from 'express';
-import User from '../models/UserModels.js';
-import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
-
+import User from '../../../Admin/user/models/UserModels.js';
+import upload from "../../../config/multerConfig.js";
+import bcrypt from 'bcryptjs';
 const router = express.Router();
 
-
-// Login Endpoint: POST /api/auth/login
-// router.post('/login', async (req, res) => {
-//     try {
-//       const { email, password } = req.body;
-      
-//       // Check if the user exists
-//       const user = await User.findOne({ email });
-//       if (!user) {
-//         return res.status(401).json({ message: 'Invalid email or password' });
-//       }
-  
-//       // Compare the password using bcrypt
-//       const isMatch = await bcrypt.compare(password, user.password);
-//       if (!isMatch) {
-//         return res.status(401).json({ message: 'Invalid email or password' });
-//       }
-  
-//       // Generate JWT token
-//     //   const token = jwt.sign(
-//     //     { userId: user._id, email: user.email },
-//     //     // process.env.JWT_SECRET,
-//     //    your_secret_key,
-//     //     { expiresIn: '1h' }
-//     //   );
-  
-//       res.status(200).json({  message: 'successfully login', user: { id: user._id, email: user.email } });
-//     } catch (error) {
-//       res.status(500).json({ message: 'Server error', error: error.message });
-//     }
-//   });
-
-// ✅ Create User
-router.post('/create', async (req, res) => {
+// Create a new user
+router.post('/user/create', upload.single("image"), async (req, res) => {
     try {
-        const { userId, name, lastname, email, password, mobile_no, gender, user_type, dob, image, roleId } = req.body;
+      const { name, lastname, email, password, mobile_no, gender, user_type, role } = req.body;
+      // Check if email already exists
+      const existingEmailUser = await User.findOne({ email });
+      if (existingEmailUser) {
+          return res.status(400).json({ message: 'Email already exists. Please use a different email.' });
+      }
 
-        const newUser = new User({
-            userId,
-            name,
-            lastname,
-            email,
-            password,
-            mobile_no,
-            gender,
-            user_type,
-            dob,
-            image,
-            roleId
-        });
-
-        await newUser.save();
-        res.status(201).json({ message: 'User created successfully', user: newUser });
+      // Check if mobileNo already exists
+      const existingMobileUser = await User.findOne({ mobile_no });
+      if (existingMobileUser) {
+          return res.status(400).json({ message: 'Mobile number already exists. Please use a different mobile number.' });
+      }
+       // Hash password before saving
+        const hashedPassword = await bcrypt.hash(password, 10);
+     
+     const profilePic = req.file ? req.file.path : ""; 
+      const newUser = new User({
+        name,
+        lastname,
+        email,
+        password: hashedPassword,
+        mobile_no,
+        gender,
+        user_type,
+        image: profilePic,
+        role,
+      });
+      await newUser.save();
+      res.status(201).json({ message: "User created successfully", user: newUser });
     } catch (error) {
-        res.status(500).json({ message: 'Error creating user', error: error.message });
+      res.status(500).json({ message: `Error creating User: ${error.message}`, error: error.message });
     }
+  });
+  
+
+// Get all active users
+router.get('/users/all', async (req, res) => {
+  try {
+    const users = await User.find({ status: 1 }).populate('role');
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching users", error: error.message });
+  }
 });
 
-// ✅ Get All Active Users
-router.get('/all', async (req, res) => {
-    try {
-        const users = await User.find({ status: 1 }).populate('roleId', 'userRole');
-        res.status(200).json(users);
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching users', error: error.message });
-    }
+// Get a user by ID
+router.get('/user/:id', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if(!user) return res.status(404).json({ message: "User not found" });
+    res.status(200).json(user);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching user", error: error.message });
+  }
 });
 
-// ✅ Get User by ID
-router.get('/:id', async (req, res) => {
+// Update a user
+router.put('/user/update/:id', upload.single('image'), async (req, res) => {
     try {
-        const user = await User.findById(req.params.id).populate('userId');
-        if (!user) return res.status(404).json({ message: 'User not found' });
+        const { name, lastname, gender, role } = req.body;
 
-        res.status(200).json(user);
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching user', error: error.message });
-    }
-});
+        let updateData = { name, lastname, gender, role };
 
-// ✅ Update User
-router.put('/update/:id', async (req, res) => {
-    try {
-        const { name, lastname, mobile_no, gender, user_type, dob, image, roleId } = req.body;
-
+        if (req.file) {
+            updateData.image = req.file.path; // Update profile picture path if a new file is uploaded
+        }
         const updatedUser = await User.findByIdAndUpdate(
             req.params.id,
-            { name, lastname, mobile_no, gender, user_type, dob, image, roleId },
+            updateData,
             { new: true }
         );
 
         if (!updatedUser) return res.status(404).json({ message: 'User not found' });
 
-        res.status(200).json({ message: 'User updated successfully', user: updatedUser });
+        res.status(200).json({ message: 'User updated successfully', User: updatedUser });
     } catch (error) {
-        res.status(500).json({ message: 'Error updating user', error: error.message });
+        res.status(500).json({ message: 'Error updating User', error: error.message });
     }
 });
 
-// ✅ Soft Delete User (Change Status to 0)
-router.put('/delete/:id', async (req, res) => {
-    try {
-        const updatedUser = await User.findByIdAndUpdate(
-            req.params.id,
-            { status: 0 }, // Soft delete
-            { new: true }
-        );
-
-        if (!updatedUser) return res.status(404).json({ message: 'User not found' });
-
-        res.status(200).json({ message: 'User status changed to inactive', user: updatedUser });
-    } catch (error) {
-        res.status(500).json({ message: 'Error changing user status', error: error.message });
-    }
+// Soft delete a user (set status to 0)
+router.put('/user/delete/:id', async (req, res) => {
+  try {
+    const updatedUser = await User.findByIdAndUpdate(req.params.id, { status: 0 }, { new: true });
+    if(!updatedUser) return res.status(404).json({ message: "User not found" });
+    res.status(200).json({ message: "User deleted successfully", user: updatedUser });
+  } catch (error) {
+    res.status(500).json({ message: "Error deleting user", error: error.message });
+  }
 });
 
 export default router;

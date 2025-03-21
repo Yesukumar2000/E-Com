@@ -10,10 +10,10 @@ const UserSchema = new mongoose.Schema({
     mobile_no: { type: String, required: true },
     gender: { type: String, enum: ['Male', 'Female', 'Other'], required: true },
     user_type: { type: String, required: true }, // e.g., Admin, Customer
-    dob: { type: Date, required: true },
+    // dob: { type: Date, required: true },
     image: { type: String }, // URL for profile picture
-    roleId: { type: mongoose.Schema.Types.ObjectId, ref: 'UserRole', required: false },
-    status: { type: Number, default: 1 } // 1 = Active, 0 = Inactive (Soft Delete)
+    role: { type: mongoose.Schema.Types.ObjectId, ref: 'Role', required: false },
+    status: { type: Number, default: 1 } 
 }, { timestamps: true });
 
 // 🔒 Hash password before saving
