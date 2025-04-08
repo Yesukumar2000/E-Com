@@ -142,7 +142,7 @@ function ProductList({ onEdit, refreshTrigger }) {
     },
   ];
 
-  const rows = [...products].reverse().map((p) => ({
+  const rows = [...products].map((p) => ({
     whichProduct: p.whichProduct,
     product_type: p.product_type,
     category: p.category,
